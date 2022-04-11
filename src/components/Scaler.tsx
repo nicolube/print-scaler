@@ -31,14 +31,17 @@ class Scaler extends Component<Props, State> {
 
     w: number = 0;
     h: number = 0;
-
-    file?: Readonly<IDxf>;
+    center: Vector = new Vector(0, 0);
 
     globalScale: number = 3;
 
-    center: Vector = new Vector(0, 0);
-
     lines: Line[] = [];
+
+    file?: Readonly<IDxf>;
+
+    isRotating: boolean = false;
+    maxAngle: number = 0;
+    maxScale: number = 0;
 
     constructor(props: Props) {
         super(props);
@@ -68,9 +71,16 @@ class Scaler extends Component<Props, State> {
         console.log(lineOffset);
 
         this.lines.forEach(l => l.move(-lineOffset.x, -lineOffset.y));
-        this.state_.angle = 0;
-
+        this.startCalc();
     }
+    
+    startCalc = () => {
+        this.state_.angle = 0;
+        this.maxAngle = 0;
+        this.maxScale = 0;
+        this.isRotating = true;
+    }
+
 
     getDimentsion = () => {
         let max = new Vector(Number.MIN_VALUE, Number.MIN_VALUE);
@@ -139,16 +149,19 @@ class Scaler extends Component<Props, State> {
         p5.clear();
         p5.background(240);
         p5.translate(this.w / 2, this.h / 2)
-        if (this.file) {
+        if (this.isRotating) {
             let a = p5.TWO_PI / 360 / 100 * p5.deltaTime;
             this.state_.angle += a;
-            this.state_.angle %= p5.TWO_PI;
+            if (this.state_.angle > p5.PI) {
+                this.isRotating = false;
+                a = this.maxAngle - this.state_.angle;
+                this.state_.angle = this.maxAngle;
+            }
             this.setState(this.state_);
             this.lines.forEach(l => l.rotate(a));
         }
 
         const [,width, height] = this.getDimentsion();
-        p5.noFill();
         let sacaledBed = this.state_.bedSize.clone()
         let sacaledPintarea = this.state_.bedSize.clone().sub(this.state_.padding * 2)
 
@@ -159,12 +172,23 @@ class Scaler extends Component<Props, State> {
         else
             this.state_.partScale = sacaledPintarea.x / scaledPartOutline.x;
 
-        scaledPartOutline.mul(this.globalScale).mul(this.state_.partScale);
+        if (this.state_.partScale > this.maxScale) {
+            this.maxAngle = this.state_.angle;
+            this.maxScale = this.state_.partScale;
+        }
+        scaledPartOutline.mul(this.state_.partScale);
+
+        scaledPartOutline.mul(this.globalScale);
+        
+        p5.fill(255);
+        p5.stroke(255, 0 , 0);
+        p5.strokeWeight(3);
         this.drawRectCentered(p5, sacaledBed.mul(this.globalScale));
+        p5.noFill();
+        p5.stroke(0, 0, 255);
         this.drawRectCentered(p5, sacaledPintarea.mul(this.globalScale));
+        p5.stroke(0);
         this.drawRectCentered(p5, scaledPartOutline);
-
-
         this.lines.forEach(l => this.drawLine(p5, l.clone().scale(this.globalScale).scale(this.state_.partScale)));
     }
 
@@ -180,6 +204,7 @@ class Scaler extends Component<Props, State> {
         this.state_.padding = target.padding.value;
         this.updateSize();
         this.setState(this.state_);
+        this.startCalc();
     }
 
     render() {
