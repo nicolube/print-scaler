@@ -162,7 +162,7 @@ class Scaler extends Component<Props, State> {
             }
             this.setState(this.state_);
         }
-        lines.forEach(l => l.rotate(this.state_.angle));
+        lines.forEach(l => l.rotate(-this.state_.angle));
 
         const [offset, width, height] = this.getDimentsion(lines);
         lines.forEach(l => l.move(-offset.x - width / 2, -offset.y - height / 2))
