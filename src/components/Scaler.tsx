@@ -160,7 +160,6 @@ class Scaler extends Component<Props, State> {
                 this.isRotating = false;
                 this.state_.angle = this.maxAngle;
             }
-            this.setState(this.state_);
         }
         lines.forEach(l => l.rotate(-this.state_.angle));
 
@@ -179,8 +178,8 @@ class Scaler extends Component<Props, State> {
         if (this.state_.partScale > this.maxScale) {
             this.maxAngle = this.state_.angle;
             this.maxScale = this.state_.partScale;
-
         }
+        this.setState(this.state_);
 
         scaledPartOutline.mul(this.state_.partScale);
 
