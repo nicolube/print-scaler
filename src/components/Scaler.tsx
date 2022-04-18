@@ -59,21 +59,16 @@ class Scaler extends Component<Props, State> {
             if (e.type === "LINE") {
                 let vertices: Vector[] = [];
                 (e as ILineEntity).vertices.forEach(v => {
-                    vertices.push(new Vector(v.x, v.y));
+                    vertices.push(new Vector(v.x, -v.y));
                 });
-                this.lines.push(new Line(vertices))
+                if (vertices.length > 1)
+                    this.lines.push(new Line(vertices))
             }
         });
 
-        // Move lines to center
-        const [offset, width, height] = this.getDimentsion();
-        let lineOffset = new Vector(offset.x + width / 2, offset.y + height / 2);
-        console.log(lineOffset);
-
-        this.lines.forEach(l => l.move(-lineOffset.x, -lineOffset.y));
         this.startCalc();
     }
-    
+
     startCalc = () => {
         this.state_.angle = 0;
         this.maxAngle = 0;
@@ -82,21 +77,28 @@ class Scaler extends Component<Props, State> {
     }
 
 
-    getDimentsion = () => {
-        let max = new Vector(Number.MIN_VALUE, Number.MIN_VALUE);
+    getDimentsion = (lines: Line[]) => {
+        let max = new Vector(-Number.MAX_VALUE, -Number.MAX_VALUE);
         let min = new Vector(Number.MAX_VALUE, Number.MAX_VALUE);
-        this.lines.forEach(l => {
+        lines.forEach(l => {
             l.vertices.forEach(v => {
-                if (v.x > max.x)
+                if (v.x > max.x) {
                     max.x = v.x;
-                else if (v.x < min.x)
+                }
+                else if (v.x < min.x) {
                     min.x = v.x;
-                if (v.y > max.y)
+                }
+                if (v.y > max.y) {
                     max.y = v.y;
-                else if (v.y < min.y)
+                }
+                else if (v.y < min.y) {
                     min.y = v.y;
+                } else {
+
+                }
             });
         });
+
         let offset = min;
         let width = max.x - min.x;
         let height = max.y - min.y;
@@ -149,19 +151,21 @@ class Scaler extends Component<Props, State> {
         p5.clear();
         p5.background(240);
         p5.translate(this.w / 2, this.h / 2)
+        let lines: Line[] = [];
+        this.lines.forEach(l => lines.push(l.clone()))
         if (this.isRotating) {
             let a = p5.TWO_PI / 360 / 100 * p5.deltaTime;
             this.state_.angle += a;
             if (this.state_.angle > p5.PI) {
                 this.isRotating = false;
-                a = this.maxAngle - this.state_.angle;
                 this.state_.angle = this.maxAngle;
             }
             this.setState(this.state_);
-            this.lines.forEach(l => l.rotate(a));
         }
+        lines.forEach(l => l.rotate(this.state_.angle));
 
-        const [,width, height] = this.getDimentsion();
+        const [offset, width, height] = this.getDimentsion(lines);
+        lines.forEach(l => l.move(-offset.x - width / 2, -offset.y - height / 2))
         let sacaledBed = this.state_.bedSize.clone()
         let sacaledPintarea = this.state_.bedSize.clone().sub(this.state_.padding * 2)
 
@@ -175,13 +179,15 @@ class Scaler extends Component<Props, State> {
         if (this.state_.partScale > this.maxScale) {
             this.maxAngle = this.state_.angle;
             this.maxScale = this.state_.partScale;
+
         }
+
         scaledPartOutline.mul(this.state_.partScale);
 
         scaledPartOutline.mul(this.globalScale);
-        
+
         p5.fill(255);
-        p5.stroke(255, 0 , 0);
+        p5.stroke(255, 0, 0);
         p5.strokeWeight(3);
         this.drawRectCentered(p5, sacaledBed.mul(this.globalScale));
         p5.noFill();
@@ -189,7 +195,7 @@ class Scaler extends Component<Props, State> {
         this.drawRectCentered(p5, sacaledPintarea.mul(this.globalScale));
         p5.stroke(0);
         this.drawRectCentered(p5, scaledPartOutline);
-        this.lines.forEach(l => this.drawLine(p5, l.clone().scale(this.globalScale).scale(this.state_.partScale)));
+        lines.forEach(l => this.drawLine(p5, l.scale(this.globalScale).scale(this.state_.partScale)));
     }
 
     handleSubmit = (event: FormEvent) => {
@@ -206,7 +212,6 @@ class Scaler extends Component<Props, State> {
         this.setState(this.state_);
         this.startCalc();
     }
-
     render() {
 
         return (
