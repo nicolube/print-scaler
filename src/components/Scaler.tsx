@@ -1,9 +1,9 @@
 import React, { Component, FormEvent } from 'react'
 import Sketch from 'react-p5'
-import { Line, Vector } from '../utils/geometry'
+import { Line, Part, Vector } from '../utils/geometry'
 import UploadPrompt from './uploadPrompt'
 import P5 from "p5";
-import { IDxf, ILineEntity } from 'dxf-parser';
+import { IDxf } from 'dxf-parser';
 import { Button, Form, FormControl, InputGroup, Ratio } from 'react-bootstrap';
 
 type Props = {}
@@ -35,9 +35,7 @@ class Scaler extends Component<Props, State> {
 
     globalScale: number = 3;
 
-    lines: Line[] = [];
-
-    file?: Readonly<IDxf>;
+    part?: Part;
 
     isRotating: boolean = false;
     maxAngle: number = 0;
@@ -50,22 +48,9 @@ class Scaler extends Component<Props, State> {
 
 
     onDxf = (dxf?: IDxf) => {
-        this.file = dxf;
+        if (dxf)
+            this.part = Part.createFromDxf(dxf);
         this.checkFile();
-
-        // Load files
-        this.lines = [];
-        this.file?.entities.forEach(e => {
-            if (e.type === "LINE") {
-                let vertices: Vector[] = [];
-                (e as ILineEntity).vertices.forEach(v => {
-                    vertices.push(new Vector(v.x, -v.y));
-                });
-                if (vertices.length > 1)
-                    this.lines.push(new Line(vertices))
-            }
-        });
-
         this.startCalc();
     }
 
@@ -76,34 +61,6 @@ class Scaler extends Component<Props, State> {
         this.isRotating = true;
     }
 
-
-    getDimentsion = (lines: Line[]) => {
-        let max = new Vector(-Number.MAX_VALUE, -Number.MAX_VALUE);
-        let min = new Vector(Number.MAX_VALUE, Number.MAX_VALUE);
-        lines.forEach(l => {
-            l.vertices.forEach(v => {
-                if (v.x > max.x) {
-                    max.x = v.x;
-                }
-                else if (v.x < min.x) {
-                    min.x = v.x;
-                }
-                if (v.y > max.y) {
-                    max.y = v.y;
-                }
-                else if (v.y < min.y) {
-                    min.y = v.y;
-                } else {
-
-                }
-            });
-        });
-
-        let offset = min;
-        let width = max.x - min.x;
-        let height = max.y - min.y;
-        return [offset, width, height] as const;
-    }
 
     updateSize = () => {
 
@@ -120,7 +77,7 @@ class Scaler extends Component<Props, State> {
     }
 
     checkFile = () => {
-        this.state_.showUploadPromt = !this.file;
+        this.state_.showUploadPromt = !this.part;
         this.setState(this.state_);
     }
 
@@ -151,8 +108,8 @@ class Scaler extends Component<Props, State> {
         p5.clear();
         p5.background(240);
         p5.translate(this.w / 2, this.h / 2)
-        let lines: Line[] = [];
-        this.lines.forEach(l => lines.push(l.clone()))
+        if (!this.part) return;
+        let part = this.part.clone();
         if (this.isRotating) {
             let a = p5.TWO_PI / 360 / 100 * p5.deltaTime;
             this.state_.angle += a;
@@ -161,19 +118,15 @@ class Scaler extends Component<Props, State> {
                 this.state_.angle = this.maxAngle;
             }
         }
-        lines.forEach(l => l.rotate(-this.state_.angle));
+        part.rotate(-this.state_.angle);
 
-        const [offset, width, height] = this.getDimentsion(lines);
-        lines.forEach(l => l.move(-offset.x - width / 2, -offset.y - height / 2))
+        const [, width, height] = part.getDimentsion();
         let sacaledBed = this.state_.bedSize.clone()
         let sacaledPintarea = this.state_.bedSize.clone().sub(this.state_.padding * 2)
 
         let scaledPartOutline = new Vector(width, height);
 
-        if (sacaledPintarea.x / scaledPartOutline.x > sacaledPintarea.y / scaledPartOutline.y)
-            this.state_.partScale = sacaledPintarea.y / scaledPartOutline.y;
-        else
-            this.state_.partScale = sacaledPintarea.x / scaledPartOutline.x;
+        this.state_.partScale = part.getMaxScale(sacaledPintarea);
 
         if (this.state_.partScale > this.maxScale) {
             this.maxAngle = this.state_.angle;
@@ -194,7 +147,7 @@ class Scaler extends Component<Props, State> {
         this.drawRectCentered(p5, sacaledPintarea.mul(this.globalScale));
         p5.stroke(0);
         this.drawRectCentered(p5, scaledPartOutline);
-        lines.forEach(l => this.drawLine(p5, l.scale(this.globalScale).scale(this.state_.partScale)));
+        part.lines.forEach(l => this.drawLine(p5, l.scale(this.globalScale).scale(this.state_.partScale)));
     }
 
     handleSubmit = (event: FormEvent) => {
